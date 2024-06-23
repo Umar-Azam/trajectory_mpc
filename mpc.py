@@ -8,8 +8,8 @@ import matplotlib.pyplot as plt
 # Define velocity constraints
 MAX_LINEAR_VELOCITY = 1.0  # m/s
 MIN_LINEAR_VELOCITY = -1.0  # m/s
-MAX_ANGULAR_VELOCITY = 1  # rad/s
-MIN_ANGULAR_VELOCITY = -1  # rad/s
+MAX_ANGULAR_VELOCITY = 1.0  # rad/s
+MIN_ANGULAR_VELOCITY = -1.0  # rad/s
 
 def system_dynamics(state, control, dt):
     X, Y, theta, v, omega = state
@@ -92,15 +92,15 @@ def generate_reference_trajectory(N):
 # %%
 
 # MPC parameters
-N = 10  # Prediction horizon
-dt = 0.1  # Time step
+N = 20  # Prediction horizon
+dt = 0.05  # Time step
 
 
 # Initial state
 initial_state = np.array([1, 0, np.pi/2, 0, 0])  # [X, Y, theta, v, omega]
 
 # Simulation
-num_steps = 100  # Increased number of steps for full circle
+num_steps = 200  # Increased number of steps for full circle
 actual_trajectory = np.zeros((num_steps+1, 5))
 actual_trajectory[0] = initial_state
 
