@@ -10,6 +10,8 @@ MAX_LINEAR_VELOCITY = 1.0  # m/s
 MIN_LINEAR_VELOCITY = -1.0  # m/s
 MAX_ANGULAR_VELOCITY = 1.0  # rad/s
 MIN_ANGULAR_VELOCITY = -1.0  # rad/s
+MAX_ACCEL = 2.0  # m/s^2
+MIN_ACCEL = -2.0  # m/s^2
 
 def system_dynamics(state, control, dt):
     X, Y, theta, v, omega = state
@@ -77,7 +79,7 @@ def mpc_control(initial_state, reference_trajectory, dt, N):
         controls_guess,
         args=(initial_state, reference_trajectory, dt, N),
         method='SLSQP',
-        bounds=[(-2, 2)] * (N * n_controls)  # Control Boundary
+        bounds=[(MIN_ACCEL, MAX_ACCEL)] * (N * n_controls)  # Control Boundary
     )
     
     optimal_controls = result.x.reshape(-1, 2)
