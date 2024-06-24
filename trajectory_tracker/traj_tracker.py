@@ -52,10 +52,10 @@ def cost_function(controls, initial_state, reference_trajectory, dt, N):
     trajectory = predict_trajectory(initial_state, controls.reshape(-1, 2), dt, N)
     
     # State error cost (increased weight)
-    position_state_cost = 50 * np.sum((trajectory[:, :2] - reference_trajectory[:, :2])**2)
+    position_state_cost = 10 * np.sum((trajectory[:, :2] - reference_trajectory[:, :2])**2)
     
 
-    angle_cost = np.sum((1 - np.cos(trajectory[:, 2] - reference_trajectory[:, 2]))**2)
+    angle_cost = 5 * np.sum((1 - np.cos(trajectory[:, 2] - reference_trajectory[:, 2]))**2)
     
     # Control input cost (reduced weight)
     control_cost = 0.01 * np.sum(controls**2)
@@ -64,12 +64,12 @@ def cost_function(controls, initial_state, reference_trajectory, dt, N):
     velocity_penalty = 1000 * velocity_constraint_penalty(trajectory)
     
     # # Add a cost for final state error
-    # final_state_cost = 100 * np.sum((trajectory[-1, :2] - reference_trajectory[-1, :2])**2)
+    final_state_cost = 100 * np.sum((trajectory[-1, :] - reference_trajectory[-1, :])**2)
     
     # return state_cost + control_cost + final_state_cost
 
     print(position_state_cost + angle_cost + control_cost + velocity_penalty )
-    return position_state_cost + angle_cost + control_cost + velocity_penalty 
+    return position_state_cost + angle_cost + control_cost + velocity_penalty  + final_state_cost
 
 # Works fine up until here
 
@@ -191,11 +191,11 @@ def trajectory_parser(ref_trajectory):
     num_intermediate = len(ref_trajectory) - 1
     
     # Initialize the decomposed trajectory with double the size minus 1
-    decomposed_trajectory = np.zeros((2 * len(ref_trajectory) - 1, 5))
+    decomposed_trajectory = np.zeros((len(ref_trajectory) + 2*num_intermediate, 5))
     
     for i in range(num_intermediate):
         # Copy the current reference point
-        decomposed_trajectory[2*i] = ref_trajectory[i]
+        decomposed_trajectory[3*i] = ref_trajectory[i]
         
         # Calculate the intermediate point
         x1, y1 = ref_trajectory[i][:2]
@@ -210,9 +210,16 @@ def trajectory_parser(ref_trajectory):
             angle  = angle  + 2*np.pi
         
         # Set the intermediate point
-        decomposed_trajectory[2*i + 1] = [
-            (x1 + x2) / 2,  # X: midpoint
-            (y1 + y2) / 2,  # Y: midpoint
+        decomposed_trajectory[3*i + 1] = [
+            x1,  # X: midpoint
+            y1,  # Y: midpoint
+            angle,          # theta: angle between points
+            0,              # v: velocity (set to 0 for intermediate)
+            0               # w: angular velocity (set to 0 for intermediate)
+        ]
+        decomposed_trajectory[3*i + 2] = [
+            x2,  # X: midpoint
+            y2,  # Y: midpoint
             angle,          # theta: angle between points
             0,              # v: velocity (set to 0 for intermediate)
             0               # w: angular velocity (set to 0 for intermediate)
@@ -222,6 +229,14 @@ def trajectory_parser(ref_trajectory):
     decomposed_trajectory[-1] = ref_trajectory[-1]
     
     return decomposed_trajectory 
+
+def threshold_check(actual_state, reference_state):
+    metric = np.sum((actual_state[:2] - reference_state[:2])**2)
+    metric += np.sum((actual_state[-2:] - reference_state[-2:])**2)
+    metric += np.sum((1 - np.cos(actual_state[2] - reference_state[2]))**2)
+    return metric
+
+
 
 # %%
 
@@ -238,15 +253,19 @@ reference_trajectory = trajectory_parser(reference_trajectory)
 control_list = np.zeros(shape = (max_num_steps,2))
 threshold = 0.05
 
+
+# %%
+
 ind = 0
 
-for i in range(4):
+
+for i in range(10):
 
   
     input_traj = reference_generator(reference_trajectory[i,:],N+1)
     #mpc_control(actual_trajectory[ind], input_traj , dt, N)
 
-    while(np.sum((actual_trajectory[ind] - reference_trajectory[i,:])**2) > threshold):
+    while(threshold_check(actual_trajectory[ind],reference_trajectory[i,:]) > threshold):
 
         optimal_control = mpc_control(actual_trajectory[ind], input_traj , dt, N)
         actual_trajectory[ind+1] = system_dynamics(actual_trajectory[ind], optimal_control, dt)
@@ -258,7 +277,7 @@ for i in range(4):
 
 
 
-plt.plot(actual_trajectory[:, 0], actual_trajectory[:, 1], 'b-', label='MPC')
+plt.plot(actual_trajectory[:ind, 0], actual_trajectory[:ind, 1], 'b-', label='MPC')
 plt.title('MPC Trajectory Tracking')
 plt.xlabel('X')
 plt.ylabel('Y')
@@ -270,7 +289,15 @@ plt.show()
 
 
 # %%
+# Specify the file name
+file_name = 'trajectory.json'
 
+# Save the list as a JSON file
+with open(file_name, 'w') as json_file:
+    json.dump(actual_trajectory[:ind,:3].tolist(), json_file)
+
+
+# %%
 
 
 for i in range(len(reference_trajectory[:,0])):

@@ -56,22 +56,25 @@ def cost_function(controls, initial_state, reference_trajectory, dt, N):
     velocity_penalty = 1000 * velocity_constraint_penalty(trajectory)
     
     # # Add a cost for final state error
-    # final_state_cost = 100 * np.sum((trajectory[-1, :2] - reference_trajectory[-1, :2])**2)
+    final_state_cost = 100 * np.sum((trajectory[-1, :2] - reference_trajectory[-1, :2])**2)
     
     # return state_cost + control_cost + final_state_cost
 
 
-    return state_cost + control_cost + velocity_penalty
+    return state_cost + control_cost + velocity_penalty + final_state_cost
 
 # Works fine up until here
 
 # %%
 
-def mpc_control(initial_state, reference_trajectory, dt, N):
+def mpc_control(initial_state, reference_trajectory, dt, N, prev_controls_guess):
     n_controls = 2  # Number of control inputs (a, alpha)
     
     # Initial guess for controls
-    controls_guess = np.zeros(N * n_controls)
+    if (len(prev_controls_guess) == 0):
+        controls_guess = np.zeros(N * n_controls)
+    else:
+        controls_guess = prev_controls_guess
     
     # Optimization
     result = minimize(
@@ -82,8 +85,8 @@ def mpc_control(initial_state, reference_trajectory, dt, N):
         bounds=[(MIN_ACCEL, MAX_ACCEL)] * (N * n_controls)  # Control Boundary
     )
     
-    optimal_controls = result.x.reshape(-1, 2)
-    return optimal_controls[0]  # Return only the first control input
+    optimal_controls = result.x
+    return optimal_controls  # Return only the first control input
 
 def generate_reference_trajectory(N):
     t = np.linspace(0, 2*np.pi, N+1)
@@ -94,7 +97,7 @@ def generate_reference_trajectory(N):
 # %%
 
 # MPC parameters
-N = 20  # Prediction horizon
+N = 40  # Prediction horizon
 dt = 0.05  # Time step
 
 
@@ -116,16 +119,24 @@ reference_trajectory = np.vstack((reference_trajectory, padding))
 # %%
 
 control_list = np.zeros(shape = (num_steps,2))
+prev_control_guess = []
 
 for i in range(num_steps):
+
+
+
     # Compute optimal control
-    optimal_control = mpc_control(actual_trajectory[i], reference_trajectory[i:i+1+N], dt, N)
+    optimal_control = mpc_control(actual_trajectory[i], reference_trajectory[i:i+1+N], dt, N, prev_control_guess)
     
     # Save optimal control parameters
-    control_list[i] = optimal_control
+    optimal_setpoint = optimal_control.reshape(-1, 2)[0]
+    control_list[i] = optimal_setpoint
+
+
+    prev_control_guess = optimal_control
 
     # Apply control and update state
-    actual_trajectory[i+1] = system_dynamics(actual_trajectory[i], optimal_control, dt)
+    actual_trajectory[i+1] = system_dynamics(actual_trajectory[i], optimal_setpoint, dt)
 
 # Plotting
 plt.figure(figsize=(10, 8))
